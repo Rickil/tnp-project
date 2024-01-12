@@ -7,6 +7,7 @@
 #include "utils.h"
 
 void removePlanePoints(std::vector<Point>& points, const Point& plane, float threshold) {
+
     // Remove points from 'points' vector if they are close to the plane
     points.erase(std::remove_if(points.begin(), points.end(), [&](const Point p) {
         return distanceToPlane(p.position, plane.position, plane.normal) < threshold;
@@ -23,7 +24,7 @@ void colorPlanePoints(const std::vector<Eigen::Vector3f>& positions,
         for (size_t j = 0; j < planes.size(); ++j) {
             if (distanceToPlane(positions[i], planes[j].position, planes[j].normal) < threshold) {
                 colors[i] = planeColors[j];
-                break; // Stop checking other planes if this point is already colored
+                break;
             }
         }
     }
@@ -81,7 +82,6 @@ std::vector<Point> detectMultiplePlanes(std::vector<Point>& points, int numPlane
     std::vector<Point> planes;
 
     for (int i = 0; i < numPlanes; ++i) {
-        //std::cout << "size of points: " << points.size() << std::endl;
         Point plane = ransac(points, iterations, threshold, angleThreshold);
         planes.push_back(plane);
 
@@ -89,7 +89,7 @@ std::vector<Point> detectMultiplePlanes(std::vector<Point>& points, int numPlane
         removePlanePoints(points, plane, threshold);
 
         if (points.empty()) {
-            break; // No more points to process
+            break;
         }
     }
 
@@ -155,7 +155,7 @@ int main(int argc, char const *argv[])
     //detect all the planes
     std::vector<Point> planes = detectMultiplePlanes(points, numPlanes, m, delta, angleThreshold);
 
-    // Modify the color of the points on the plane to be red
+    //color the points
     colorPlanePoints(positions, colors, planes, planeColors, delta);
 
     auto end_time = std::chrono::high_resolution_clock::now();

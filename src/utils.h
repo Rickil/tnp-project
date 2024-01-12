@@ -37,7 +37,6 @@ std::vector<Point> selectRandomPoints(const std::vector<Point>& points, int numP
 // Helper function to compute the angle between two vectors in degrees
 float angleBetween(const Eigen::Vector3f& v1, const Eigen::Vector3f& v2) {
     float dot = v1.dot(v2) / (v1.norm() * v2.norm());
-    // Clamp the dot product to avoid numerical issues with acos
     dot = std::max(-1.0f, std::min(1.0f, dot));
     return std::acos(dot) * (180.0f / M_PI); // Convert to degrees
 }
