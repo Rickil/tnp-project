@@ -1,21 +1,9 @@
-#include <Eigen/Core>
-#include <Eigen/Geometry>
 #include <obj.h>
 #include <iostream>
-#include <random>
 #include <algorithm>
 #include <chrono>
 
-struct Point {
-    Eigen::Vector3f position;
-    Eigen::Vector3f normal;
-    Eigen::Vector3f color;
-};
-
-// Function to compute distance from a point to a plane
-float distanceToPlane(const Eigen::Vector3f& point, const Eigen::Vector3f& planePosition, const Eigen::Vector3f& planeNormal) {
-    return std::abs((point - planePosition).dot(planeNormal)) / planeNormal.norm();
-}
+#include "utils.h"
 
 void removePlanePoints(std::vector<Point>& points, const Point& plane, float threshold) {
     // Remove points from 'points' vector if they are close to the plane
@@ -39,48 +27,45 @@ void colorPlanePoints(const std::vector<Eigen::Vector3f>& positions,
     }
 }
 
-Point ransac(const std::vector<Point>& points, int iterations, float threshold) {
+
+Point ransac(const std::vector<Point>& points, int iterations, float threshold, float angleThreshold) {
+
     Point plane;
     int best_count = 0;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-
     #pragma omp parallel for shared(plane, best_count)
     for (int i = 0; i < iterations; ++i) {
-        // Randomly select 3 points by generating 3 numbers between 0 and points.size()
-        std::uniform_int_distribution<> distrib(0, points.size() - 1);
-        std::vector<Eigen::Vector3f> points_random;
 
-        for (int j = 0; j < 3; ++j) {
-            Eigen::Vector3f point = points[distrib(gen)].position;
-            while (std::find(points_random.begin(), points_random.end(), point) != points_random.end()){
-                point = points[distrib(gen)].position;
-            }
-            points_random.push_back(point);
+        // Select 3 random points
+        std::vector<Point> points_random = selectRandomPoints(points, 3);
+
+        //filter normals
+        while (maxAngle(points_random) > angleThreshold) {
+            points_random = selectRandomPoints(points, 3);
         }
 
-        Eigen::Vector3f p1 = points_random[0];
-        Eigen::Vector3f p2 = points_random[1];
-        Eigen::Vector3f p3 = points_random[2];
+        Point p1 = points_random[0];
+        Point p2 = points_random[1];
+        Point p3 = points_random[2];
 
         // Compute plane defined by these 3 points
-        Eigen::Vector3f normal = (p2 - p1).cross(p3 - p1).normalized();
-        Eigen::Vector3f position = p1;
+        Point ComputedPlane;
+        ComputedPlane.normal = (p2.position - p1.position).cross(p3.position - p1.position).normalized();
+        ComputedPlane.position = p1.position;
 
         int count = 0;
 
         // Count how many points lie close to the plane
         for (const auto& p : points) {
-            if (distanceToPlane(p.position, position, normal) < threshold) {
+            if (distanceToPlane(p.position, ComputedPlane.position, ComputedPlane.normal) < threshold) {
                 ++count;
             }
         }
 
         // Update best plane if current one is better
         if (count > best_count) {
-            plane.position = position;
-            plane.normal = normal;
+            plane.position = ComputedPlane.position;
+            plane.normal = ComputedPlane.normal;
             best_count = count;
         }
     }
@@ -88,12 +73,12 @@ Point ransac(const std::vector<Point>& points, int iterations, float threshold) 
     return plane;
 }
 
-std::vector<Point> detectMultiplePlanes(std::vector<Point>& points, int numPlanes, int iterations, float threshold) {
+std::vector<Point> detectMultiplePlanes(std::vector<Point>& points, int numPlanes, int iterations, float threshold, float angleThreshold){
     std::vector<Point> planes;
 
     for (int i = 0; i < numPlanes; ++i) {
         std::cout << "size of points: " << points.size() << std::endl;
-        Point plane = ransac(points, iterations, threshold);
+        Point plane = ransac(points, iterations, threshold, angleThreshold);
         planes.push_back(plane);
 
         // Remove points that are close to the detected plane
@@ -154,13 +139,14 @@ int main(int argc, char const *argv[])
     // RANSAC parameters
     const int m = 200; // Number of iterations
     const float delta = 0.2f; // Threshold distance to consider a point as an inlier
+    const float angleThreshold = 5.0f; // Threshold angle between normals of points to consider them as inliers
     const int numPlanes = 3;
 
     //generate random colors for the planes
     std::vector<Eigen::Vector3f> planeColors = generateRandomColors(numPlanes);
 
     //detect all the planes
-    std::vector<Point> planes = detectMultiplePlanes(points, numPlanes, m, delta);
+    std::vector<Point> planes = detectMultiplePlanes(points, numPlanes, m, delta, angleThreshold);
 
     // Modify the color of the points on the plane to be red
     colorPlanePoints(positions, colors, planes, planeColors, delta);
