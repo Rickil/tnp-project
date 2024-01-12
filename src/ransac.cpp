@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 
+
 #include "utils.h"
 
 void removePlanePoints(std::vector<Point>& points, const Point& plane, float threshold) {
@@ -17,6 +18,7 @@ void colorPlanePoints(const std::vector<Eigen::Vector3f>& positions,
                       const std::vector<Point>& planes,
                       const std::vector<Eigen::Vector3f>& planeColors,
                       float threshold) {
+    #pragma omp parallel
     for (size_t i = 0; i < positions.size(); ++i) {
         for (size_t j = 0; j < planes.size(); ++j) {
             if (distanceToPlane(positions[i], planes[j].position, planes[j].normal) < threshold) {
@@ -56,6 +58,7 @@ Point ransac(const std::vector<Point>& points, int iterations, float threshold, 
         int count = 0;
 
         // Count how many points lie close to the plane
+        #pragma omp parallel for reduction(+:count)
         for (const auto& p : points) {
             if (distanceToPlane(p.position, ComputedPlane.position, ComputedPlane.normal) < threshold) {
                 ++count;
@@ -63,6 +66,7 @@ Point ransac(const std::vector<Point>& points, int iterations, float threshold, 
         }
 
         // Update best plane if current one is better
+        #pragma omp critical
         if (count > best_count) {
             plane.position = ComputedPlane.position;
             plane.normal = ComputedPlane.normal;
@@ -77,7 +81,7 @@ std::vector<Point> detectMultiplePlanes(std::vector<Point>& points, int numPlane
     std::vector<Point> planes;
 
     for (int i = 0; i < numPlanes; ++i) {
-        std::cout << "size of points: " << points.size() << std::endl;
+        //std::cout << "size of points: " << points.size() << std::endl;
         Point plane = ransac(points, iterations, threshold, angleThreshold);
         planes.push_back(plane);
 
@@ -130,16 +134,19 @@ int main(int argc, char const *argv[])
     if (colors.empty()){
         colors = std::vector<Eigen::Vector3f>(positions.size(), Eigen::Vector3f(0.0f, 0.0f, 0.0f));
     }
+    if (normals.empty()){
+        normals = std::vector<Eigen::Vector3f>(positions.size(), Eigen::Vector3f(0.0f, 0.0f, 0.0f));
+    }
 
     std::vector<Point> points;
-    for (size_t i = 0; i < positions.size(); ++i) {
+    for (size_t i = 0; i < positions.size(); i++) {
         points.push_back({positions[i], normals[i], colors[i]});
     }
 
     // RANSAC parameters
     const int m = 200; // Number of iterations
     const float delta = 0.2f; // Threshold distance to consider a point as an inlier
-    const float angleThreshold = 5.0f; // Threshold angle between normals of points to consider them as inliers
+    const float angleThreshold = 10; // Threshold angle between normals of points to consider them as inliers
     const int numPlanes = 3;
 
     //generate random colors for the planes
