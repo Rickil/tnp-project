@@ -23,6 +23,7 @@ std::vector<Point> selectRandomPoints(const std::vector<Point>& points, int numP
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distrib(0, points.size() - 1);
 
+    #pragma omp parallel for
     for (int i = 0; i < numPoints; ++i) {
         Point point = points[distrib(gen)];
         while (std::find(points_random.begin(), points_random.end(), point) != points_random.end()){
